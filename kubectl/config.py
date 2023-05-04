@@ -38,13 +38,11 @@ class Env(BaseSettings): # pylint: disable=too-few-public-methods
 
 env = Env()
 
-
-
 # API Endpoints
 
-DOCKER_URL = "http://localhost:2375"
+DOCKER_URL = "http://localhost:9898"
 
-GITHUB_URL = "https://api.github.com"
+GITHUB_URL = "https://api.github.com"   
 
 CLOUDFLARE_URL = "https://api.cloudflare.com/client/v4"
 

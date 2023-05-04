@@ -2,7 +2,7 @@
 name = "kubectl"
 version = "0.0.1"
 description = ""
-authors = ["Oscar Bahamonde <oscar.bahamonde@sakai-dev.com>"]
+authors = ["Oscar Bahamonde <oscar.bahamonde.dev@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.7"

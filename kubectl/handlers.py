@@ -1,6 +1,7 @@
 """Non decorated API Request Handlers"""
+import json
 import botocore
-from aiofauna import Request, Response, json_response
+from aiofauna import Request, Response, json_response, ClientSession
 from aiohttp_sse import sse_response
 from aiohttp.web_request import FileField
 from aioboto3 import Session
@@ -9,6 +10,15 @@ from kubectl.models import Upload
 from kubectl.client import client
 
 session = Session()
+
+# Latest Commit SHA
+async def get_latest_commit_sha(owner: str, repo: str) -> str:
+    """
+    Gets the SHA of the latest commit in the repository.
+    """
+    url = f"https://api.github.com/repos/{owner}/{repo}/commits"
+    payload = await client.fetch(url, headers=GITHUB_HEADERS)   
+    return payload[0]["sha"] 
 
 # Upload Component
 async def upload_handler(request:Request)->Response:
@@ -42,8 +52,7 @@ async def docker_pull(request:Request)->Response:
     Docker Pull
     """
     params = dict(request.query)
-    image = params.get("image")
-    
+    image = params.get("image")   
     async with sse_response(request) as resp:
         async for event in client.stream(f"{DOCKER_URL}/images/create?fromImage={image}", "POST"):
             await resp.send(event)
@@ -52,18 +61,40 @@ async def docker_pull(request:Request)->Response:
                 break
         return resp
 
-# Latest Commit SHA
-async def get_latest_commit_sha(owner: str, repo: str) -> str:
+# Docker Build from GitHub Tarball
+async def docker_build_from_github_tarball(owner: str, repo: str):
     """
-
-
-    Gets the SHA of the latest commit in the repository.
-
-
+    Builds a Docker image from the latest code for the given GitHub repository.
     """
+    sha = await get_latest_commit_sha(owner, repo)
+    tarball_url = f"https://api.github.com/repos/{owner}/{repo}/tarball/{sha}"
+    local_path = f"{owner}-{repo}-{sha[:7]}"
+    build_args = json.dumps({"LOCAL_PATH": local_path})
+    async with ClientSession() as http_session:
+        async with http_session.post(
+            f"{DOCKER_URL}/build?remote={tarball_url}&dockerfile={local_path}/Dockerfile&buildargs={build_args}"
+        ) as response:
+            streamed_data = await response.text()
+            id_ = streamed_data.split("Successfully built ")[1].split("\\n")[0]
+            return id_
 
-    url = f"https://api.github.com/repos/{owner}/{repo}/commits"
+# Cloudflare create record    
+async def create_dns_record(name: str):
+    """
+    Creates a DNS record for the given name on Cloudflare.
+    """
+    payload =  {"type": "A", "name": name, "content": env.IP_ADDR, "ttl": 1, "proxied": True}   
+    return await client.fetch(
+        f"https://api.cloudflare.com/client/v4/zones/{env.CF_ZONE_ID}/dns_records",
+        "POST",
+        headers=CLOUDFLARE_HEADERS,
+        data=payload,
+    )
 
-    payload = await client.fetch(url, headers=GITHUB_HEADERS)
-    
-    return payload[0]["sha"] 
+# Docker Start Container
+async def docker_start(container: str):
+    """
+    Starts a Docker container.
+    """
+    return await client.text(f"{DOCKER_URL}/containers/{container}/start", "POST")
+
